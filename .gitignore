@@ -1,0 +1,6 @@
+api/.env
+writeassistdev.zip
+backups/
+.vscode/
+api/__pycache__/
+api/.venv/
