@@ -34,10 +34,10 @@ This Moodle plugin integrates an AI writing assistant that guides students throu
 ## Development TODO
 
 #### 1. Finalize AI Agent
--Make sure each phase (Plan & Organize, Write, Edit & Revise) has optimized system prompts that guide the AI's behavior appropriately
--Make sure the agent has the parts of the project JSON schema that are relevant for better context
--Fix and test the `AddIdeaTool` and `AddCommentTool` tool calls to ensure they properly modify the project JSON structure
--Make sure that the project load/save logic can dynamically handle the agent's changes to brainstorm ideas and quill editor content with HTML comment attributes
+- Make sure each phase (Plan & Organize, Write, Edit & Revise) has optimized system prompts that guide the AI's behavior appropriately
+- Make sure the agent has the parts of the project JSON schema that are relevant for better context
+- Fix and test the `AddIdeaTool` and `AddCommentTool` tool calls to ensure they properly modify the project JSON structure
+- Make sure that the project load/save logic can dynamically handle the agent's changes to brainstorm ideas and quill editor content with HTML comment attributes
 
 #### 3. Test Project Saving with Multiple Users (Implemented, not fully tested)
 - Test project saving/loading logic with multiple test users to ensure data isolation
@@ -45,8 +45,8 @@ This Moodle plugin integrates an AI writing assistant that guides students throu
 - Ensure project data persists correctly across sessions and doesn't interfere between users
 
 #### 2. Improve Write Phase
--Break down the single blank quill editor into small, focused editable sections for each section in the outline created during the plan/outline phase. This will help with "Blank Page Paralysis"
--Dynamically display the outline the user created in the plan/outline phase, with isolated editors for each section. Ensure the sectioned editors update automatically if the user goes back to the plan phase and modifies the outline
+- Break down the single blank quill editor into small, focused editable sections for each section in the outline created during the plan/outline phase. This will help with "Blank Page Paralysis"
+- Dynamically display the outline the user created in the plan/outline phase, with isolated editors for each section. Ensure the sectioned editors update automatically if the user goes back to the plan phase and modifies the outline
 
 #### 4. UI/UX Polish
 - Fix inconsistencies in style, padding, and spacing throughout the interface
