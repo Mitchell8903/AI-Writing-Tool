@@ -375,6 +375,35 @@ class PlanModule {
                 this.restoreBubblesFromState(state.plan.ideas);
             }
         });
+        
+        // Listen for AI-generated updates
+        this.globalState.subscribe('aiUpdate', (updatedProject) => {
+            if (this.isInitialized && updatedProject.plan && updatedProject.plan.ideas) {
+                this.handleAIUpdates(updatedProject.plan.ideas);
+            }
+        });
+    }
+
+    // Handle AI-generated updates to the plan
+    handleAIUpdates(ideas) {
+        if (!Array.isArray(ideas)) return;
+        
+        // Find new AI-generated ideas that aren't already in the UI
+        const newIdeas = ideas.filter(idea => 
+            idea.aiGenerated && 
+            idea.location === 'brainstorm' && 
+            !this.bubbles.has(idea.id)
+        );
+        
+        // Add new AI-generated bubbles
+        newIdeas.forEach(idea => {
+            const bubble = new BubbleComponent(idea.content, idea.id, true);
+            this.bubbles.set(bubble.id, bubble);
+            
+            if (this.elements.ideaBubbles) {
+                this.elements.ideaBubbles.appendChild(bubble.element);
+            }
+        });
     }
 
     restoreBubblesFromState(ideas) {
@@ -930,14 +959,19 @@ class AIWritingAssistant {
                 if (updatedProject) {
                     const currentState = this.globalState.getState();
                     
-                    // Merge the updated project data (particularly ideas and other AI modifications)
-                    if (updatedProject.plan && updatedProject.plan.ideas) {
-                        currentState.plan = currentState.plan || {};
-                        currentState.plan.ideas = updatedProject.plan.ideas;
-                    }
+                    // Use the API's merge function to properly merge the updated project
+                    const mergedProject = this.api.mergeUpdatedProject(currentState, updatedProject);
                     
-                    // Update the global state and save
-                    this.globalState.setState(currentState);
+                    // Update the global state with the merged project
+                    this.globalState.setState(mergedProject);
+                    
+                    // Trigger AI update event for modules to handle
+                    this.globalState.notifyListeners('aiUpdate', updatedProject);
+                    
+                    // Trigger UI updates for specific changes
+                    this.handleProjectUpdates(updatedProject);
+                    
+                    // Save the updated project
                     await this.projectManager.saveProject();
                 }
             } else {
@@ -948,6 +982,68 @@ class AIWritingAssistant {
             console.error('Failed to handle user message:', error);
             const errorMsg = 'Sorry, I couldn\'t connect to the AI service. Please make sure the AI Writing Assistant API server is running.';
             await this.projectManager.addChatMessage('assistant', errorMsg);
+        }
+    }
+
+    // Handle specific project updates from AI responses
+    handleProjectUpdates(updatedProject) {
+        // Handle new brainstorm ideas
+        if (updatedProject.plan && updatedProject.plan.ideas) {
+            this.handleNewIdeas(updatedProject.plan.ideas);
+        }
+        
+        // Handle new edit suggestions
+        if (updatedProject.edit && updatedProject.edit.suggestions) {
+            this.handleNewSuggestions(updatedProject.edit.suggestions);
+        }
+        
+        // Handle content updates
+        if (updatedProject.write && updatedProject.write.content) {
+            this.handleContentUpdates(updatedProject.write.content);
+        }
+    }
+
+    // Handle new ideas from AI responses
+    handleNewIdeas(ideas) {
+        if (this.modules.plan && Array.isArray(ideas)) {
+            // Find new AI-generated ideas
+            const newIdeas = ideas.filter(idea => idea.aiGenerated && idea.location === 'brainstorm');
+            
+            newIdeas.forEach(idea => {
+                // Create a new bubble for the AI-generated idea
+                const bubble = new BubbleComponent(idea.content, idea.id, true);
+                this.modules.plan.bubbles.set(bubble.id, bubble);
+                
+                // Add to the brainstorm panel
+                if (this.modules.plan.elements.ideaBubbles) {
+                    this.modules.plan.elements.ideaBubbles.appendChild(bubble.element);
+                }
+            });
+        }
+    }
+
+    // Handle new edit suggestions from AI responses
+    handleNewSuggestions(suggestions) {
+        if (this.modules.edit && Array.isArray(suggestions)) {
+            // Find new AI-generated suggestions
+            const newSuggestions = suggestions.filter(suggestion => suggestion.aiGenerated);
+            
+            // Update the edit module with new suggestions
+            newSuggestions.forEach(suggestion => {
+                // This would integrate with the edit module's suggestion system
+                console.log('New AI suggestion:', suggestion);
+            });
+        }
+    }
+
+    // Handle content updates from AI responses
+    handleContentUpdates(content) {
+        if (this.modules.write && this.modules.write.editor) {
+            // Update the write editor content if it has changed
+            const currentContent = this.modules.write.editor.root.innerHTML;
+            if (currentContent !== content) {
+                this.modules.write.editor.root.innerHTML = content;
+            }
         }
     }
 }

@@ -282,6 +282,62 @@ class ProjectAPI {
         return cleanObject(sanitized);
     }
 
+    // Merge updated project data from AI response with current state
+    mergeUpdatedProject(currentProject, updatedProject) {
+        if (!updatedProject) return currentProject;
+        
+        // Create a deep copy of current project
+        const merged = JSON.parse(JSON.stringify(currentProject));
+        
+        // Merge each section of the project
+        Object.keys(updatedProject).forEach(key => {
+            if (key === 'chatHistory') {
+                // For chat history, we want to preserve the existing messages
+                // and only add new ones if they don't already exist
+                if (Array.isArray(updatedProject[key])) {
+                    const existingMessages = merged[key] || [];
+                    const newMessages = updatedProject[key];
+                    
+                    // Only add messages that don't already exist
+                    newMessages.forEach(newMsg => {
+                        const exists = existingMessages.some(existingMsg => 
+                            existingMsg.role === newMsg.role && 
+                            existingMsg.content === newMsg.content &&
+                            existingMsg.timestamp === newMsg.timestamp
+                        );
+                        if (!exists) {
+                            existingMessages.push(newMsg);
+                        }
+                    });
+                    merged[key] = existingMessages;
+                }
+            } else if (typeof updatedProject[key] === 'object' && updatedProject[key] !== null) {
+                // For other objects, merge them deeply
+                merged[key] = this.deepMerge(merged[key] || {}, updatedProject[key]);
+            } else {
+                // For primitive values, use the updated value
+                merged[key] = updatedProject[key];
+            }
+        });
+        
+        return merged;
+    }
+
+    // Deep merge two objects
+    deepMerge(target, source) {
+        const result = { ...target };
+        
+        for (const key in source) {
+            if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+                result[key] = this.deepMerge(target[key] || {}, source[key]);
+            } else {
+                result[key] = source[key];
+            }
+        }
+        
+        return result;
+    }
+
     // Check if AI endpoint is running and accessible
     async checkAIHealth() {
         if (!this.apiEndpoint || this.apiEndpoint === null || this.apiEndpoint === '' || this.apiEndpoint === 'null') {

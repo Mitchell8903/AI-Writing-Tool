@@ -23,23 +23,23 @@ class AddCommentInput(BaseModel):
 class AddIdeaTool(BaseTool):
     """Tool for adding ideas to the brainstorm list."""
     name: str = "add_idea"
-    description: str = "Add an idea to the brainstorm ideas list. Use this when the user suggests or mentions a new idea that should be captured."
+    description: str = "Add a new idea to the brainstorm list when user mentions one."
     args_schema: type = AddIdeaInput
 
     def _run(self, idea: str) -> str:
         """Add an idea to the brainstorm list."""
-        return f"Idea '{idea}' has been added to the brainstorm list."
+        return f"Added idea: {idea}"
 
 
 class AddCommentTool(BaseTool):
     """Tool for adding comments to quill editor content."""
     name: str = "add_comment"
-    description: str = "Add comments to the quill editor content. Use this when you want to add editorial comments or suggestions to the written content."
+    description: str = "Add a comment or suggestion to the written content."
     args_schema: type = AddCommentInput
 
     def _run(self, content: str, comment_text: str) -> str:
         """Add a comment to the quill editor content."""
-        return f"Comment '{comment_text}' has been added to the content."
+        return f"Added comment: {comment_text}"
 
 
 class WritingAgent:
@@ -58,87 +58,74 @@ class WritingAgent:
         
         # System prompts for each phase
         self.system_prompts = {
-            "plan_organize": """You are an AI writing assistant in the Plan & Organize phase. Your role is to help users:
+            "plan_organize": """You are a helpful writing assistant in the Plan & Organize phase. Keep responses short and conversational.
 
-1. **Brainstorm and generate ideas** for their writing project
-2. **Organize and structure** their thoughts and ideas
-3. **Create outlines** and planning documents
-4. **Identify key themes** and arguments
-5. **Suggest research directions** and sources
+**Your role:**
+- Help brainstorm ideas
+- Organize thoughts
+- Create outlines
+- Suggest when ready to write
 
-**Phase Guidelines:**
-- Focus on idea generation and organization
-- Help users think through their topic from multiple angles
-- Encourage exploration of different perspectives
-- Suggest when to move to the Write phase (when ideas are well-organized and outline is clear)
-- Be creative and open-ended in your suggestions
+**Response style:**
+- Be concise (1-2 sentences max)
+- Use casual, friendly tone
+- Ask direct questions
+- Give quick suggestions
 
 **When to suggest moving to Write phase:**
-- User has a clear outline or structure
-- Main ideas and arguments are identified
-- Research direction is established
-- User feels ready to start writing
+- Clear outline exists
+- Main ideas identified
+- User feels ready
 
-**When to suggest revisiting this phase:**
-- Ideas seem scattered or unfocused
-- User is struggling with organization
-- New ideas keep emerging that need integration""",
+**When to revisit this phase:**
+- Ideas scattered
+- Need better organization""",
 
-            "write": """You are an AI writing assistant in the Write phase. Your role is to help users:
+            "write": """You are a helpful writing assistant in the Write phase. Keep responses short and conversational.
 
-1. **Generate actual content** based on their planning
-2. **Maintain focus** on their outline and structure
-3. **Develop ideas** into full paragraphs and sections
-4. **Ensure coherence** and flow between sections
-5. **Provide writing support** and encouragement
+**Your role:**
+- Help develop content
+- Maintain focus on outline
+- Provide writing support
+- Encourage progress
 
-**Phase Guidelines:**
-- Focus on content creation and development
-- Help users expand their ideas into full text
-- Maintain consistency with their planning
-- Encourage progress while maintaining quality
-- Suggest when to move to Edit & Revise phase (when draft is complete)
-- Be supportive and constructive
+**Response style:**
+- Be concise (1-2 sentences max)
+- Use casual, friendly tone
+- Give quick writing tips
+- Stay encouraging
 
-**When to suggest moving to Edit & Revise phase:**
-- First draft is complete
-- All planned sections are written
-- User has a full document to work with
-- Content covers all main points
+**When to suggest moving to Edit phase:**
+- First draft complete
+- All sections written
+- Ready for revision
 
-**When to suggest revisiting Plan & Organize phase:**
-- User is struggling with structure while writing
-- New ideas emerge that require planning
-- Content is becoming unfocused or scattered
-- Major reorganization is needed""",
+**When to revisit Plan phase:**
+- Structure issues
+- Need better organization""",
 
-            "edit_revise": """You are an AI writing assistant in the Edit & Revise phase. Your role is to help users:
+            "edit_revise": """You are a helpful writing assistant in the Edit & Revise phase. Keep responses short and conversational.
 
-1. **Review and improve** existing content
-2. **Identify areas** for revision and enhancement
-3. **Suggest specific edits** and improvements
-4. **Check for clarity** and coherence
-5. **Polish and refine** the writing
+**Your role:**
+- Review content
+- Suggest improvements
+- Check clarity
+- Polish writing
 
-**Phase Guidelines:**
-- Focus on improvement and refinement
-- Provide specific, actionable feedback
-- Help identify strengths and weaknesses
-- Suggest concrete revisions
-- Encourage iterative improvement
-- Suggest when content is ready for final review
+**Response style:**
+- Be concise (1-2 sentences max)
+- Use casual, friendly tone
+- Give specific feedback
+- Stay constructive
 
-**When to suggest the work is complete:**
-- Content is clear and well-organized
-- All major issues have been addressed
-- User is satisfied with the quality
-- Ready for submission or publication
+**When work is complete:**
+- Content clear and organized
+- Major issues addressed
+- Ready for submission
 
-**When to suggest revisiting Write phase:**
-- Major content gaps are identified
-- Significant rewriting is needed
-- New sections or ideas require development
-- Structure needs substantial changes"""
+**When to revisit Write phase:**
+- Major gaps found
+- Significant rewriting needed"""
         }
         
         # Create agent executors for each phase
@@ -219,6 +206,74 @@ class WritingAgent:
         
         return "\n".join(context_parts) if context_parts else "No additional context available."
     
+    def _create_full_project_context(self, project: Dict[str, Any]) -> str:
+        """Create full project context including all JSON schema data."""
+        import json
+        
+        # Create a clean copy of the project for context (excluding chat history to avoid duplication)
+        context_project = project.copy()
+        if "chatHistory" in context_project:
+            del context_project["chatHistory"]
+        
+        # Format the full project state as JSON for the agent
+        try:
+            project_json = json.dumps(context_project, indent=2)
+            return f"Complete Project State (JSON):\n{project_json}"
+        except Exception as e:
+            # Fallback to the basic context if JSON serialization fails
+            return self._create_project_context(project)
+    
+    def _apply_tool_calls_to_project(self, project: Dict[str, Any], agent_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply tool call results to the project and return modified project."""
+        modified_project = project.copy()
+        
+        # Check if the agent used any tools
+        if "intermediate_steps" in agent_result:
+            for step in agent_result["intermediate_steps"]:
+                if isinstance(step, tuple) and len(step) >= 2:
+                    action, observation = step[0], step[1]
+                    
+                    # Handle AddIdeaTool
+                    if hasattr(action, 'tool') and action.tool == "add_idea":
+                        idea = action.tool_input.get("idea", "")
+                        if idea:
+                            # Initialize brainstorm ideas if not present
+                            if "plan" not in modified_project:
+                                modified_project["plan"] = {}
+                            if "ideas" not in modified_project["plan"]:
+                                modified_project["plan"]["ideas"] = []
+                            
+                            # Add the new idea
+                            new_idea = {
+                                "id": f"ai_idea_{len(modified_project['plan']['ideas']) + 1}",
+                                "content": idea,
+                                "location": "brainstorm",
+                                "aiGenerated": True
+                            }
+                            modified_project["plan"]["ideas"].append(new_idea)
+                    
+                    # Handle AddCommentTool
+                    elif hasattr(action, 'tool') and action.tool == "add_comment":
+                        content = action.tool_input.get("content", "")
+                        comment_text = action.tool_input.get("comment_text", "")
+                        if content and comment_text:
+                            # Initialize edit suggestions if not present
+                            if "edit" not in modified_project:
+                                modified_project["edit"] = {}
+                            if "suggestions" not in modified_project["edit"]:
+                                modified_project["edit"]["suggestions"] = []
+                            
+                            # Add the comment as a suggestion
+                            new_suggestion = {
+                                "id": f"ai_comment_{len(modified_project['edit']['suggestions']) + 1}",
+                                "content": comment_text,
+                                "type": "comment",
+                                "aiGenerated": True
+                            }
+                            modified_project["edit"]["suggestions"].append(new_suggestion)
+        
+        return modified_project
+    
     def process_chat_message(self, user_input: str, project: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
         """Process a chat message and return AI response with modified project."""
         try:
@@ -228,11 +283,13 @@ class WritingAgent:
             # Get current phase
             current_phase = self._get_current_phase(project)
             
-            # Create project context
-            project_context = self._create_project_context(project)
+            # Create project context with full JSON schema
+            project_context = self._create_full_project_context(project)
             
-            # Prepare input with context
-            full_input = f"Project Context:\n{project_context}\n\nUser Message: {user_input}"
+            # Prepare input with full context and response style instruction
+            full_input = f"""Full Project State:\n{project_context}\n\nUser Message: {user_input}
+
+IMPORTANT: Keep your response concise and conversational (1-2 sentences max). Use a casual, friendly tone like you're texting a friend."""
             
             # Get the appropriate agent
             agent = self.agents[current_phase]
@@ -246,9 +303,8 @@ class WritingAgent:
             # Extract AI response
             ai_response = result.get("output", "I'm sorry, I couldn't process your request.")
             
-            # Create modified project (for now, return the original project)
-            # In a real implementation, you would modify the project based on tool calls
-            modified_project = project.copy()
+            # Create modified project by applying tool call results
+            modified_project = self._apply_tool_calls_to_project(project, result)
             
             # Add the new message to chat history
             if "chatHistory" not in modified_project:
